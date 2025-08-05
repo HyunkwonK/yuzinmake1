@@ -1,0 +1,15 @@
+# PyInstaller
+__pycache__/
+dist/
+build/
+*.spec
+.venv/
+*.pdf/
+*.xlsx/
+
+# 가상 환경 (Virtual Environment)
+venv/
+
+# API 키 및 기타 민감한 정보
+*.env
+.env

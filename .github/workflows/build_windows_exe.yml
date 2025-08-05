@@ -1,0 +1,58 @@
+name: Build Windows EXE
+
+# main 브랜치에 푸시될 때마다 워크플로우를 실행합니다.
+on:
+  push:
+    branches:
+      - main
+  # 수동으로 워크플로우를 실행하고 싶을 때 사용
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Windows 최신 환경에서 실행합니다.
+    runs-on: windows-latest
+
+    steps:
+    # 1. 저장소 코드를 체크아웃합니다.
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # 2. Python 3.11 환경을 설정합니다.
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    # 3. 필요한 Python 라이브러리를 설치합니다.
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller pandas openpyxl xlsxwriter requests pdfplumber camelot-py[cv]
+
+    # 4. Tesseract-OCR 및 Ghostscript를 설치합니다.
+    # 이 과정은 Windows 환경에서 OCR 및 PDF 처리를 위해 필수적입니다.
+    - name: Install Tesseract and Ghostscript
+      run: |
+        # Scoop을 사용하여 Tesseract와 Ghostscript를 설치합니다.
+        # Scoop은 Windows용 패키지 매니저입니다.
+        Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+        iwr -useb get.scoop.sh | iex
+        scoop install tesseract ghostscript
+
+    # 5. PyInstaller로 .exe 파일을 빌드합니다.
+    - name: Build the EXE
+      run: |
+        # API 키 환경 변수를 설정합니다.
+        # GitHub Secrets에서 가져온 값을 사용합니다.
+        # powershell의 경우 $env:변수명 으로 환경 변수 설정
+        $env:DEEPL_API_KEY = "${{ secrets.DEEPL_API_KEY }}"
+        # PyInstaller 명령어 실행
+        pyinstaller --onefile --noconsole --name "PDF_Translator" test.py
+
+    # 6. 생성된 .exe 파일을 아티팩트로 업로드합니다.
+    - name: Upload EXE as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PDF-Translator-EXE
+        path: dist/PDF_Translator.exe
