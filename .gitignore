@@ -7,6 +7,10 @@ build/
 *.pdf/
 *.xlsx/
 
+# 큰 바이너리 파일들
+pdf_processor_linux
+pdf_processor
+
 # 가상 환경 (Virtual Environment)
 venv/
 
