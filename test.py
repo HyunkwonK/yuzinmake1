@@ -22,7 +22,8 @@ from openpyxl import load_workbook
 # DeepL API 설정
 DEEPL_API_KEY = os.getenv("DEEPL_API_KEY")
 if not DEEPL_API_KEY:
-    raise ValueError("DEEPL_API_KEY 환경 변수가 설정되지 않았습니다.")
+    print("⚠ DEEPL_API_KEY 환경 변수가 설정되지 않았습니다. 번역 기능이 비활성화됩니다.")
+    DEEPL_API_KEY = None
 DEEPL_API_URL = "https://api-free.deepl.com/v2/translate"
 OCR_LANGUAGE = "eng+kor"
 
@@ -449,6 +450,10 @@ def ocr_pdf_simple(input_pdf, output_pdf, language):
 
 def translate_with_deepl(text, source_lang="EN", target_lang="KO"):
     """DeepL API를 사용하여 텍스트 번역"""
+    if not DEEPL_API_KEY:
+        # API 키가 없으면 원본 텍스트 반환
+        return text
+        
     if not text or not text.strip():
         return ""
     
@@ -812,6 +817,13 @@ def pdf_to_excel(input_pdf, output_xlsx):
 def create_bilingual_excel(input_xlsx, output_xlsx):
     """기존 Excel 파일에 번역 결과를 추가하여 이중 언어 Excel 생성"""
     try:
+        if not DEEPL_API_KEY:
+            print_progress("⚠ DeepL API 키가 없어 번역을 건너뜁니다. 원본 파일을 복사합니다.")
+            # API 키가 없으면 원본 파일을 그대로 복사
+            import shutil
+            shutil.copy2(input_xlsx, output_xlsx)
+            return True
+            
         print_progress("🌐 번역 및 이중언어 Excel 생성 중...")
         original_workbook = load_workbook(input_xlsx)
         
