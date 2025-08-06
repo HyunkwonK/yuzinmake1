@@ -29,12 +29,44 @@ jobs:
       run: |
         # Chocolatey를 사용하여 시스템 레벨에서 설치
         choco install tesseract ghostscript -y
-        # PATH에 Tesseract 추가
+        
+        # PATH에 Tesseract와 Ghostscript 추가
         $env:PATH += ";C:\Program Files\Tesseract-OCR"
+        $env:PATH += ";C:\Program Files\gs\gs10.04.0\bin"
         echo "C:\Program Files\Tesseract-OCR" >> $env:GITHUB_PATH
+        echo "C:\Program Files\gs\gs10.04.0\bin" >> $env:GITHUB_PATH
+        
         # 설치 확인
         tesseract --version
-        gs --version
+        
+        # Ghostscript 경로 확인 및 테스트
+        if (Test-Path "C:\Program Files\gs") {
+            $gsPath = Get-ChildItem "C:\Program Files\gs" | Where-Object {$_.Name -like "gs*"} | Select-Object -First 1
+            if ($gsPath) {
+                $gsBinPath = Join-Path $gsPath.FullName "bin"
+                if (Test-Path $gsBinPath) {
+                    echo "Ghostscript 경로 발견: $gsBinPath"
+                    $env:PATH += ";$gsBinPath"
+                    echo "$gsBinPath" >> $env:GITHUB_PATH
+                    # gswin64c 또는 gs 실행파일 확인
+                    if (Test-Path "$gsBinPath\gswin64c.exe") {
+                        & "$gsBinPath\gswin64c.exe" --version
+                        echo "✓ Ghostscript 설치 확인됨"
+                    } elseif (Test-Path "$gsBinPath\gs.exe") {
+                        & "$gsBinPath\gs.exe" --version
+                        echo "✓ Ghostscript 설치 확인됨"
+                    } else {
+                        echo "⚠ Ghostscript 실행파일을 찾을 수 없지만 계속 진행합니다"
+                    }
+                } else {
+                    echo "⚠ Ghostscript bin 폴더를 찾을 수 없지만 계속 진행합니다"
+                }
+            } else {
+                echo "⚠ Ghostscript 버전 폴더를 찾을 수 없지만 계속 진행합니다"
+            }
+        } else {
+            echo "⚠ Ghostscript이 설치되지 않았지만 계속 진행합니다"
+        }
 
     # 4. 필요한 Python 라이브러리를 설치합니다.
     - name: Install Python dependencies
@@ -61,7 +93,41 @@ jobs:
         # OCR 도구 확인
         echo "OCR 도구 확인..."
         tesseract --version
-        gs --version
+        
+        # Ghostscript 확인 (여러 가능한 경로 시도)
+        $gsFound = $false
+        $gsPaths = @(
+            "gswin64c.exe",
+            "gs.exe",
+            "C:\Program Files\gs\*\bin\gswin64c.exe",
+            "C:\Program Files\gs\*\bin\gs.exe"
+        )
+        
+        foreach ($gsPath in $gsPaths) {
+            try {
+                if ($gsPath -like "*\*\*") {
+                    $foundPaths = Get-ChildItem $gsPath -ErrorAction SilentlyContinue
+                    if ($foundPaths) {
+                        & $foundPaths[0].FullName --version
+                        echo "✓ Ghostscript 발견: $($foundPaths[0].FullName)"
+                        $gsFound = $true
+                        break
+                    }
+                } else {
+                    & $gsPath --version 2>$null
+                    echo "✓ Ghostscript 발견: $gsPath"
+                    $gsFound = $true
+                    break
+                }
+            } catch {
+                continue
+            }
+        }
+        
+        if (-not $gsFound) {
+            echo "⚠ Ghostscript을 찾을 수 없지만 계속 진행합니다 (OCR 성능에 영향 있을 수 있음)"
+        }
+        
         python -c "import ocrmypdf; print('✓ ocrmypdf 사용 가능')"
         
         # PyInstaller로 빌드
