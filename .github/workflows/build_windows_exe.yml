@@ -24,29 +24,58 @@ jobs:
       with:
         python-version: '3.11'
 
-    # 3. 필요한 Python 라이브러리를 설치합니다.
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyinstaller ocrmypdf pandas openpyxl xlsxwriter requests pdfplumber camelot-py[cv]
-
-    # 4. Tesseract-OCR 및 Ghostscript를 설치합니다.
-    # 이 과정은 Windows 환경에서 OCR 및 PDF 처리를 위해 필수적입니다.
+    # 3. Chocolatey로 Tesseract와 Ghostscript를 먼저 설치합니다.
     - name: Install Tesseract and Ghostscript
       run: |
-        # Scoop을 사용하여 Tesseract와 Ghostscript를 설치합니다.
-        # Scoop은 Windows용 패키지 매니저입니다.
-        Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-        iwr -useb get.scoop.sh | iex
-        scoop install tesseract ghostscript
+        # Chocolatey를 사용하여 시스템 레벨에서 설치
+        choco install tesseract ghostscript -y
+        # PATH에 Tesseract 추가
+        $env:PATH += ";C:\Program Files\Tesseract-OCR"
+        echo "C:\Program Files\Tesseract-OCR" >> $env:GITHUB_PATH
+        # 설치 확인
+        tesseract --version
+        gs --version
 
-    # 5. PyInstaller로 .exe 파일을 빌드합니다.
+    # 4. 필요한 Python 라이브러리를 설치합니다.
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # OCR 관련 라이브러리를 먼저 설치
+        pip install ocrmypdf
+        # 나머지 라이브러리 설치
+        pip install pyinstaller pandas openpyxl xlsxwriter requests pdfplumber camelot-py[cv]
+
+    # 5. 환경변수 설정 및 PyInstaller로 .exe 파일을 빌드합니다.
     - name: Build the EXE
       env:
         DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
       run: |
-        # PyInstaller 명령어 실행
+        # 환경변수 확인
+        echo "DEEPL_API_KEY가 설정되었는지 확인..."
+        if ($env:DEEPL_API_KEY) {
+            echo "✓ DEEPL_API_KEY 설정됨 (길이: $($env:DEEPL_API_KEY.Length))"
+        } else {
+            echo "⚠ DEEPL_API_KEY가 설정되지 않음"
+        }
+        
+        # OCR 도구 확인
+        echo "OCR 도구 확인..."
+        tesseract --version
+        gs --version
+        python -c "import ocrmypdf; print('✓ ocrmypdf 사용 가능')"
+        
+        # PyInstaller로 빌드
+        echo "PyInstaller로 빌드 시작..."
         pyinstaller --onefile --console --name "PDF_Translator" test.py
+        
+        # 생성된 파일 확인
+        if (Test-Path "dist\PDF_Translator.exe") {
+            echo "✓ EXE 파일이 성공적으로 생성되었습니다."
+            Get-Item "dist\PDF_Translator.exe" | Select-Object Name, Length, LastWriteTime
+        } else {
+            echo "✗ EXE 파일 생성 실패"
+            exit 1
+        }
 
     # 6. 생성된 .exe 파일을 아티팩트로 업로드합니다.
     - name: Upload EXE as artifact
