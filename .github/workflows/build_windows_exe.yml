@@ -42,13 +42,11 @@ jobs:
 
     # 5. PyInstaller로 .exe 파일을 빌드합니다.
     - name: Build the EXE
+      env:
+        DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
       run: |
-        # API 키 환경 변수를 설정합니다.
-        # GitHub Secrets에서 가져온 값을 사용합니다.
-        # powershell의 경우 $env:변수명 으로 환경 변수 설정
-        $env:DEEPL_API_KEY = "${{ secrets.DEEPL_API_KEY }}"
         # PyInstaller 명령어 실행
-        pyinstaller --onefile --noconsole --name "PDF_Translator" test.py
+        pyinstaller --onefile --console --name "PDF_Translator" test.py
 
     # 6. 생성된 .exe 파일을 아티팩트로 업로드합니다.
     - name: Upload EXE as artifact
