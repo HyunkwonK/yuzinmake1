@@ -96,7 +96,7 @@ def check_ocr_dependencies():
             print_progress(f"⚠ {name}: 설치되지 않음 (OCR 성능에 영향 있을 수 있음)")
         except Exception as e:
             print_progress(f"⚠ {name}: 확인 중 오류 - {str(e)} (OCR 성능에 영향 있을 수 있음)")
-    
+     
     if missing_core_deps:
         print_progress("누락된 핵심 의존성 설치 방법 (Windows):")
         for dep in missing_core_deps:
