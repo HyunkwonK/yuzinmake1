@@ -15,6 +15,7 @@ import requests
 import time
 import subprocess
 import os
+import sys
 import tempfile
 import datetime
 from openpyxl import load_workbook
@@ -55,14 +56,44 @@ def check_ocr_dependencies():
     """OCR 의존성 확인 - 핵심 의존성만 체크"""
     print_progress("OCR 의존성 확인 중...")
     
+    # PyInstaller 환경에서 tesseract 경로 설정
+    if getattr(sys, 'frozen', False):
+        # PyInstaller로 패키징된 환경
+        application_path = sys._MEIPASS
+        tesseract_path = os.path.join(application_path, 'tessdata')
+        if os.path.exists(tesseract_path):
+            os.environ['TESSDATA_PREFIX'] = tesseract_path
+            print_progress(f"✓ PyInstaller 환경에서 tessdata 경로 설정: {tesseract_path}")
+        
+        # Windows에서 일반적인 tesseract 경로들 확인
+        common_paths = [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+            os.path.join(application_path, "tesseract.exe")
+        ]
+        
+        tesseract_found = False
+        for path in common_paths:
+            if os.path.exists(path):
+                # PATH에 tesseract 디렉토리 추가
+                tesseract_dir = os.path.dirname(path)
+                if tesseract_dir not in os.environ['PATH']:
+                    os.environ['PATH'] = tesseract_dir + os.pathsep + os.environ['PATH']
+                tesseract_found = True
+                print_progress(f"✓ Tesseract 경로 발견: {path}")
+                break
+        
+        if not tesseract_found:
+            print_progress("⚠ Tesseract 실행파일을 찾을 수 없습니다.")
+    
     # 핵심 의존성만 체크 (ghostscript는 선택사항)
     core_dependencies = {
-        'ocrmypdf': ['ocrmypdf', '--version'],
+        'ocrmypdf': ['python', '-c', 'import ocrmypdf; print("ocrmypdf", ocrmypdf.__version__)'],
         'tesseract': ['tesseract', '--version']
     }
     
     optional_dependencies = {
-        'ghostscript': ['gs', '--version']
+        'ghostscript': ['gswin64c.exe', '--version']
     }
     
     missing_core_deps = []
@@ -72,8 +103,12 @@ def check_ocr_dependencies():
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                version = result.stdout.strip().split('\n')[0]
-                print_progress(f"✓ {name}: {version}")
+                if name == 'ocrmypdf':
+                    version_line = result.stdout.strip()
+                    print_progress(f"✓ {name}: {version_line}")
+                else:
+                    version = result.stdout.strip().split('\n')[0]
+                    print_progress(f"✓ {name}: {version}")
             else:
                 print_progress(f"✗ {name}: 설치되어 있지만 실행 실패")
                 missing_core_deps.append(name)
@@ -94,7 +129,16 @@ def check_ocr_dependencies():
             else:
                 print_progress(f"⚠ {name}: 설치되어 있지만 실행 실패 (OCR 성능에 영향 있을 수 있음)")
         except FileNotFoundError:
-            print_progress(f"⚠ {name}: 설치되지 않음 (OCR 성능에 영향 있을 수 있음)")
+            # gs.exe도 시도
+            try:
+                result = subprocess.run(['gs.exe', '--version'], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    version = result.stdout.strip().split('\n')[0]
+                    print_progress(f"✓ {name}: {version}")
+                else:
+                    print_progress(f"⚠ {name}: 설치되지 않음 (OCR 성능에 영향 있을 수 있음)")
+            except:
+                print_progress(f"⚠ {name}: 설치되지 않음 (OCR 성능에 영향 있을 수 있음)")
         except Exception as e:
             print_progress(f"⚠ {name}: 확인 중 오류 - {str(e)} (OCR 성능에 영향 있을 수 있음)")
      
