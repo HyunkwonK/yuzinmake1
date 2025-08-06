@@ -1,149 +1,221 @@
+# name: Build Windows EXE
+
+# # main 브랜치에 푸시될 때마다 워크플로우를 실행합니다.
+# on:
+#   push:
+#     branches:
+#       - main
+#   # 수동으로 워크플로우를 실행하고 싶을 때 사용
+#   workflow_dispatch:
+
+# jobs:
+#   build:
+#     # Windows 최신 환경에서 실행합니다.
+#     runs-on: windows-latest
+
+#     steps:
+#     # 1. 저장소 코드를 체크아웃합니다.
+#     - name: Checkout code
+#       uses: actions/checkout@v4
+
+#     # 2. Python 3.11 환경을 설정합니다.
+#     - name: Set up Python
+#       uses: actions/setup-python@v5
+#       with:
+#         python-version: '3.11'
+
+#     # 3. Chocolatey로 Tesseract와 Ghostscript를 먼저 설치합니다.
+#     - name: Install Tesseract and Ghostscript
+#       run: |
+#         # Chocolatey를 사용하여 시스템 레벨에서 설치
+#         choco install tesseract ghostscript -y
+        
+#         # PATH에 Tesseract와 Ghostscript 추가
+#         $env:PATH += ";C:\Program Files\Tesseract-OCR"
+#         $env:PATH += ";C:\Program Files\gs\gs10.04.0\bin"
+#         echo "C:\Program Files\Tesseract-OCR" >> $env:GITHUB_PATH
+#         echo "C:\Program Files\gs\gs10.04.0\bin" >> $env:GITHUB_PATH
+        
+#         # 설치 확인
+#         tesseract --version
+        
+#         # Ghostscript 경로 확인 및 테스트
+#         if (Test-Path "C:\Program Files\gs") {
+#             $gsPath = Get-ChildItem "C:\Program Files\gs" | Where-Object {$_.Name -like "gs*"} | Select-Object -First 1
+#             if ($gsPath) {
+#                 $gsBinPath = Join-Path $gsPath.FullName "bin"
+#                 if (Test-Path $gsBinPath) {
+#                     echo "Ghostscript 경로 발견: $gsBinPath"
+#                     $env:PATH += ";$gsBinPath"
+#                     echo "$gsBinPath" >> $env:GITHUB_PATH
+#                     # gswin64c 또는 gs 실행파일 확인
+#                     if (Test-Path "$gsBinPath\gswin64c.exe") {
+#                         & "$gsBinPath\gswin64c.exe" --version
+#                         echo "✓ Ghostscript 설치 확인됨"
+#                     } elseif (Test-Path "$gsBinPath\gs.exe") {
+#                         & "$gsBinPath\gs.exe" --version
+#                         echo "✓ Ghostscript 설치 확인됨"
+#                     } else {
+#                         echo "⚠ Ghostscript 실행파일을 찾을 수 없지만 계속 진행합니다"
+#                     }
+#                 } else {
+#                     echo "⚠ Ghostscript bin 폴더를 찾을 수 없지만 계속 진행합니다"
+#                 }
+#             } else {
+#                 echo "⚠ Ghostscript 버전 폴더를 찾을 수 없지만 계속 진행합니다"
+#             }
+#         } else {
+#             echo "⚠ Ghostscript이 설치되지 않았지만 계속 진행합니다"
+#         }
+
+#     # 4. 필요한 Python 라이브러리를 설치합니다.
+#     - name: Install Python dependencies
+#       run: |
+#         python -m pip install --upgrade pip
+#         # OCR 관련 라이브러리를 먼저 설치
+#         pip install ocrmypdf
+#         # 나머지 라이브러리 설치
+#         pip install pyinstaller pandas openpyxl xlsxwriter requests pdfplumber camelot-py[cv]
+
+#     # 5. 환경변수 설정 및 PyInstaller로 .exe 파일을 빌드합니다.
+#     - name: Build the EXE
+#       env:
+#         DEEPL_API_KEY: "b3125acc-3a44-4648-8b4d-5ca8e7350059:fx"
+#       run: |
+#         # 환경변수 확인
+#         echo "DEEPL_API_KEY가 설정되었는지 확인..."
+#         if ($env:DEEPL_API_KEY) {
+#             echo "✓ DEEPL_API_KEY 설정됨 (길이: $($env:DEEPL_API_KEY.Length))"
+#         } else {
+#             echo "⚠ DEEPL_API_KEY가 설정되지 않음"
+#         }
+        
+#         # OCR 도구 확인
+#         echo "OCR 도구 확인..."
+#         tesseract --version
+        
+#         # Ghostscript 확인 (여러 가능한 경로 시도)
+#         $gsFound = $false
+#         $gsPaths = @(
+#             "gswin64c.exe",
+#             "gs.exe",
+#             "C:\Program Files\gs\*\bin\gswin64c.exe",
+#             "C:\Program Files\gs\*\bin\gs.exe"
+#         )
+        
+#         foreach ($gsPath in $gsPaths) {
+#             try {
+#                 if ($gsPath -like "*\*\*") {
+#                     $foundPaths = Get-ChildItem $gsPath -ErrorAction SilentlyContinue
+#                     if ($foundPaths) {
+#                         & $foundPaths[0].FullName --version
+#                         echo "✓ Ghostscript 발견: $($foundPaths[0].FullName)"
+#                         $gsFound = $true
+#                         break
+#                     }
+#                 } else {
+#                     & $gsPath --version 2>$null
+#                     echo "✓ Ghostscript 발견: $gsPath"
+#                     $gsFound = $true
+#                     break
+#                 }
+#             } catch {
+#                 continue
+#             }
+#         }
+        
+#         if (-not $gsFound) {
+#             echo "⚠ Ghostscript을 찾을 수 없지만 계속 진행합니다 (OCR 성능에 영향 있을 수 있음)"
+#         }
+        
+#         python -c "import ocrmypdf; print('✓ ocrmypdf 사용 가능')"
+        
+#         # PyInstaller로 빌드
+#         echo "PyInstaller로 빌드 시작..."
+#         pyinstaller --onefile --console --name "PDF_Translator" test.py
+        
+#         # 생성된 파일 확인
+#         if (Test-Path "dist\PDF_Translator.exe") {
+#             echo "✓ EXE 파일이 성공적으로 생성되었습니다."
+#             Get-Item "dist\PDF_Translator.exe" | Select-Object Name, Length, LastWriteTime
+#         } else {
+#             echo "✗ EXE 파일 생성 실패"
+#             exit 1
+#         }
+
+#     # 6. 생성된 .exe 파일을 아티팩트로 업로드합니다.
+#     - name: Upload EXE as artifact
+#       uses: actions/upload-artifact@v4
+#       with:
+#         name: PDF-Translator-EXE
+#         path: dist/PDF_Translator.exe
+
+
 name: Build Windows EXE
 
-# main 브랜치에 푸시될 때마다 워크플로우를 실행합니다.
 on:
   push:
     branches:
       - main
-  # 수동으로 워크플로우를 실행하고 싶을 때 사용
   workflow_dispatch:
 
 jobs:
   build:
-    # Windows 최신 환경에서 실행합니다.
     runs-on: windows-latest
 
     steps:
-    # 1. 저장소 코드를 체크아웃합니다.
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 2. Python 3.11 환경을 설정합니다.
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    # 3. Chocolatey로 Tesseract와 Ghostscript를 먼저 설치합니다.
-    - name: Install Tesseract and Ghostscript
+    # Chocolatey를 사용하여 Tesseract와 Ghostscript를 설치
+    - name: Install Tesseract and Ghostscript via Chocolatey
       run: |
-        # Chocolatey를 사용하여 시스템 레벨에서 설치
         choco install tesseract ghostscript -y
-        
-        # PATH에 Tesseract와 Ghostscript 추가
-        $env:PATH += ";C:\Program Files\Tesseract-OCR"
-        $env:PATH += ";C:\Program Files\gs\gs10.04.0\bin"
-        echo "C:\Program Files\Tesseract-OCR" >> $env:GITHUB_PATH
-        echo "C:\Program Files\gs\gs10.04.0\bin" >> $env:GITHUB_PATH
-        
-        # 설치 확인
+
+    # 설치된 Tesseract와 Ghostscript가 PATH에 추가되었는지 확인
+    # Tesseract는 C:\Program Files\Tesseract-OCR에 설치됩니다.
+    # Ghostscript는 C:\Program Files\gs\gs...\bin에 설치됩니다.
+    - name: Verify Tesseract and Ghostscript installation
+      run: |
+        # Tesseract가 정상적으로 설치되었는지 확인
         tesseract --version
         
-        # Ghostscript 경로 확인 및 테스트
-        if (Test-Path "C:\Program Files\gs") {
-            $gsPath = Get-ChildItem "C:\Program Files\gs" | Where-Object {$_.Name -like "gs*"} | Select-Object -First 1
-            if ($gsPath) {
-                $gsBinPath = Join-Path $gsPath.FullName "bin"
-                if (Test-Path $gsBinPath) {
-                    echo "Ghostscript 경로 발견: $gsBinPath"
-                    $env:PATH += ";$gsBinPath"
-                    echo "$gsBinPath" >> $env:GITHUB_PATH
-                    # gswin64c 또는 gs 실행파일 확인
-                    if (Test-Path "$gsBinPath\gswin64c.exe") {
-                        & "$gsBinPath\gswin64c.exe" --version
-                        echo "✓ Ghostscript 설치 확인됨"
-                    } elseif (Test-Path "$gsBinPath\gs.exe") {
-                        & "$gsBinPath\gs.exe" --version
-                        echo "✓ Ghostscript 설치 확인됨"
-                    } else {
-                        echo "⚠ Ghostscript 실행파일을 찾을 수 없지만 계속 진행합니다"
-                    }
-                } else {
-                    echo "⚠ Ghostscript bin 폴더를 찾을 수 없지만 계속 진행합니다"
-                }
-            } else {
-                echo "⚠ Ghostscript 버전 폴더를 찾을 수 없지만 계속 진행합니다"
-            }
-        } else {
-            echo "⚠ Ghostscript이 설치되지 않았지만 계속 진행합니다"
+        # Ghostscript 실행 파일 경로를 동적으로 찾아서 확인
+        Get-ChildItem "C:\Program Files\gs" | Where-Object {$_.PSIsContainer} | Select-Object -First 1 | ForEach-Object {
+          $gsPath = Join-Path $_.FullName "bin"
+          if (Test-Path "$gsPath\gswin64c.exe") {
+            & "$gsPath\gswin64c.exe" --version
+          } else {
+            echo "Ghostscript executable not found at $gsPath"
+            exit 1
+          }
         }
-
-    # 4. 필요한 Python 라이브러리를 설치합니다.
+    
+    # ocrmypdf를 먼저 설치해서 시스템 종속성을 찾도록 함
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        # OCR 관련 라이브러리를 먼저 설치
         pip install ocrmypdf
-        # 나머지 라이브러리 설치
         pip install pyinstaller pandas openpyxl xlsxwriter requests pdfplumber camelot-py[cv]
 
-    # 5. 환경변수 설정 및 PyInstaller로 .exe 파일을 빌드합니다.
+    # PyInstaller로 .exe 파일 빌드
+    # 여기서는 GitHub Secrets 대신 환경 변수 'env' 블록을 사용
     - name: Build the EXE
       env:
+        # Tesseract 언어 데이터가 있는 경로를 명시적으로 설정
+        TESSDATA_PREFIX: "C:\\Program Files\\Tesseract-OCR\\tessdata"
         DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
       run: |
-        # 환경변수 확인
-        echo "DEEPL_API_KEY가 설정되었는지 확인..."
-        if ($env:DEEPL_API_KEY) {
-            echo "✓ DEEPL_API_KEY 설정됨 (길이: $($env:DEEPL_API_KEY.Length))"
-        } else {
-            echo "⚠ DEEPL_API_KEY가 설정되지 않음"
-        }
-        
-        # OCR 도구 확인
-        echo "OCR 도구 확인..."
-        tesseract --version
-        
-        # Ghostscript 확인 (여러 가능한 경로 시도)
-        $gsFound = $false
-        $gsPaths = @(
-            "gswin64c.exe",
-            "gs.exe",
-            "C:\Program Files\gs\*\bin\gswin64c.exe",
-            "C:\Program Files\gs\*\bin\gs.exe"
-        )
-        
-        foreach ($gsPath in $gsPaths) {
-            try {
-                if ($gsPath -like "*\*\*") {
-                    $foundPaths = Get-ChildItem $gsPath -ErrorAction SilentlyContinue
-                    if ($foundPaths) {
-                        & $foundPaths[0].FullName --version
-                        echo "✓ Ghostscript 발견: $($foundPaths[0].FullName)"
-                        $gsFound = $true
-                        break
-                    }
-                } else {
-                    & $gsPath --version 2>$null
-                    echo "✓ Ghostscript 발견: $gsPath"
-                    $gsFound = $true
-                    break
-                }
-            } catch {
-                continue
-            }
-        }
-        
-        if (-not $gsFound) {
-            echo "⚠ Ghostscript을 찾을 수 없지만 계속 진행합니다 (OCR 성능에 영향 있을 수 있음)"
-        }
-        
-        python -c "import ocrmypdf; print('✓ ocrmypdf 사용 가능')"
-        
-        # PyInstaller로 빌드
-        echo "PyInstaller로 빌드 시작..."
-        pyinstaller --onefile --console --name "PDF_Translator" test.py
-        
-        # 생성된 파일 확인
-        if (Test-Path "dist\PDF_Translator.exe") {
-            echo "✓ EXE 파일이 성공적으로 생성되었습니다."
-            Get-Item "dist\PDF_Translator.exe" | Select-Object Name, Length, LastWriteTime
-        } else {
-            echo "✗ EXE 파일 생성 실패"
-            exit 1
-        }
+        # Tesseract 데이터 파일을 PyInstaller에 포함시키기
+        # --add-data 옵션을 사용하여 C:\Program Files\Tesseract-OCR\tessdata 폴더 전체를
+        # 빌드된 .exe 파일의 'tessdata' 폴더로 복사
+        pyinstaller --onefile --console --name "PDF_Translator" --add-data "C:\Program Files\Tesseract-OCR\tessdata;tessdata" test.py
 
-    # 6. 생성된 .exe 파일을 아티팩트로 업로드합니다.
     - name: Upload EXE as artifact
       uses: actions/upload-artifact@v4
       with:
