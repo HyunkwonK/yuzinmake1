@@ -23,8 +23,12 @@ from openpyxl import load_workbook
 # DeepL API 설정
 DEEPL_API_KEY = os.getenv("DEEPL_API_KEY")
 if not DEEPL_API_KEY:
-    print("⚠ DEEPL_API_KEY 환경 변수가 설정되지 않았습니다. 번역 기능이 비활성화됩니다.")
-    DEEPL_API_KEY = None
+    # 환경변수에서 못 찾으면 직접 설정
+    DEEPL_API_KEY = "b3125acc-3a44-4648-8b4d-5ca8e7350059:fx"
+    print("✓ DEEPL_API_KEY를 직접 설정했습니다.")
+else:
+    print(f"✓ DEEPL_API_KEY 환경변수 사용 (길이: {len(DEEPL_API_KEY)})")
+
 DEEPL_API_URL = "https://api-free.deepl.com/v2/translate"
 OCR_LANGUAGE = "eng+kor"
 
@@ -88,9 +92,23 @@ def check_ocr_dependencies():
     
     # 핵심 의존성만 체크 (ghostscript는 선택사항)
     core_dependencies = {
-        'ocrmypdf': ['python', '-c', 'import ocrmypdf; print("ocrmypdf", ocrmypdf.__version__)'],
         'tesseract': ['tesseract', '--version']
     }
+    
+    # ocrmypdf는 별도로 체크 (Python import로)
+    ocrmypdf_available = False
+    try:
+        import ocrmypdf
+        # 실제로 ocrmypdf 명령어가 실행되는지 확인
+        result = subprocess.run(['python', '-c', 'import ocrmypdf; print("✓ ocrmypdf available")'], 
+                               capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            print_progress("✓ ocrmypdf: Python 모듈로 사용 가능")
+            ocrmypdf_available = True
+        else:
+            print_progress("✗ ocrmypdf: Python 모듈 import 실패")
+    except Exception as e:
+        print_progress(f"✗ ocrmypdf: 확인 중 오류 - {str(e)}")
     
     optional_dependencies = {
         'ghostscript': ['gswin64c.exe', '--version']
@@ -103,12 +121,8 @@ def check_ocr_dependencies():
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                if name == 'ocrmypdf':
-                    version_line = result.stdout.strip()
-                    print_progress(f"✓ {name}: {version_line}")
-                else:
-                    version = result.stdout.strip().split('\n')[0]
-                    print_progress(f"✓ {name}: {version}")
+                version = result.stdout.strip().split('\n')[0]
+                print_progress(f"✓ {name}: {version}")
             else:
                 print_progress(f"✗ {name}: 설치되어 있지만 실행 실패")
                 missing_core_deps.append(name)
@@ -118,6 +132,10 @@ def check_ocr_dependencies():
         except Exception as e:
             print_progress(f"✗ {name}: 확인 중 오류 - {str(e)}")
             missing_core_deps.append(name)
+    
+    # ocrmypdf가 사용 불가능하면 missing_core_deps에 추가
+    if not ocrmypdf_available:
+        missing_core_deps.append('ocrmypdf')
     
     # 선택적 의존성 체크 (실패해도 계속 진행)
     for name, cmd in optional_dependencies.items():
@@ -355,139 +373,110 @@ def ocr_pdf_with_options(input_pdf, language='eng+kor'):
         return input_pdf
 
 def ocr_pdf_advanced(input_pdf, output_pdf, language):
-    """고급 옵션을 사용한 OCR 처리"""
+    """고급 옵션을 사용한 OCR 처리 - Python API 사용"""
     try:
-        cmd = [
-            'ocrmypdf',
-            '--force-ocr',
-            '--optimize', '1',
-            '--language', language,
-            '--deskew',
-            '--clean',
-            '--rotate-pages',
-            '--remove-background',
-            '--oversample', '300',
-            '--output-type', 'pdf',
-            input_pdf,
-            output_pdf
-        ]
+        import ocrmypdf
         
         print_progress("🔍 고급 OCR 처리 중...")
-        print_progress(f"명령어: {' '.join(cmd)}")
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        # Python API를 사용하여 OCR 실행
+        result = ocrmypdf.ocr(
+            input_pdf, 
+            output_pdf,
+            force_ocr=True,
+            optimize=1,
+            language=language,
+            deskew=True,
+            clean=True,
+            rotate_pages=True,
+            remove_background=True,
+            oversample=300,
+            output_type='pdf'
+        )
         
-        if result.returncode == 0:
+        if os.path.exists(output_pdf):
             print_progress("✓ 고급 OCR 완료")
             return True
         else:
-            print_progress(f"✗ 고급 OCR 실패 (코드: {result.returncode})")
-            if result.stderr:
-                print_progress(f"오류 메시지: {result.stderr}")
+            print_progress("✗ 고급 OCR 실패 - 출력 파일이 생성되지 않음")
             return False
             
-    except subprocess.TimeoutExpired:
-        print_progress("✗ 고급 OCR 시간 초과 (10분)")
-        return False
     except Exception as e:
         print_progress(f"✗ 고급 OCR 중 오류: {str(e)}")
         return False
 
 def ocr_pdf_basic(input_pdf, output_pdf, language):
-    """기본 옵션을 사용한 OCR 처리"""
+    """기본 옵션을 사용한 OCR 처리 - Python API 사용"""
     try:
-        cmd = [
-            'ocrmypdf',
-            '--force-ocr',
-            '--language', language,
-            '--optimize', '1',
-            input_pdf,
-            output_pdf
-        ]
+        import ocrmypdf
         
         print_progress("🔍 기본 OCR 처리 중...")
-        print_progress(f"명령어: {' '.join(cmd)}")
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = ocrmypdf.ocr(
+            input_pdf, 
+            output_pdf,
+            force_ocr=True,
+            language=language,
+            optimize=1
+        )
         
-        if result.returncode == 0:
+        if os.path.exists(output_pdf):
             print_progress("✓ 기본 OCR 완료")
             return True
         else:
-            print_progress(f"✗ 기본 OCR 실패 (코드: {result.returncode})")
-            if result.stderr:
-                print_progress(f"오류 메시지: {result.stderr}")
+            print_progress("✗ 기본 OCR 실패 - 출력 파일이 생성되지 않음")
             return False
             
-    except subprocess.TimeoutExpired:
-        print_progress("✗ 기본 OCR 시간 초과 (5분)")
-        return False
     except Exception as e:
         print_progress(f"✗ 기본 OCR 중 오류: {str(e)}")
         return False
 
 def ocr_pdf_minimal(input_pdf, output_pdf, language):
-    """최소 옵션을 사용한 OCR 처리 - Ghostscript 없이도 동작"""
+    """최소 옵션을 사용한 OCR 처리 - Python API 사용"""
     try:
-        cmd = [
-            'ocrmypdf',
-            '--language', language,
-            '--skip-text',  # 기존 텍스트 건너뛰기
-            input_pdf,
-            output_pdf
-        ]
+        import ocrmypdf
         
         print_progress("🔍 최소 OCR 처리 중...")
-        print_progress(f"명령어: {' '.join(cmd)}")
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        result = ocrmypdf.ocr(
+            input_pdf, 
+            output_pdf,
+            language=language,
+            skip_text=True
+        )
         
-        if result.returncode == 0:
+        if os.path.exists(output_pdf):
             print_progress("✓ 최소 OCR 완료")
             return True
         else:
-            print_progress(f"✗ 최소 OCR 실패 (코드: {result.returncode})")
-            if result.stderr:
-                print_progress(f"오류 메시지: {result.stderr}")
+            print_progress("✗ 최소 OCR 실패 - 출력 파일이 생성되지 않음")
+            return False
             
-            # 더 간단한 OCR 시도
-            return ocr_pdf_simple(input_pdf, output_pdf, language)
-            
-    except subprocess.TimeoutExpired:
-        print_progress("✗ 최소 OCR 시간 초과 (3분)")
-        return False
     except Exception as e:
         print_progress(f"✗ 최소 OCR 중 오류: {str(e)}")
         return False
 
 def ocr_pdf_simple(input_pdf, output_pdf, language):
-    """가장 간단한 OCR 처리"""
+    """가장 간단한 OCR 처리 - Python API 사용"""
     try:
-        cmd = [
-            'ocrmypdf',
-            '--force-ocr',  # 강제 OCR
-            '--language', language,
-            input_pdf,
-            output_pdf
-        ]
+        import ocrmypdf
         
         print_progress("🔍 간단 OCR 처리 중...")
-        print_progress(f"명령어: {' '.join(cmd)}")
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = ocrmypdf.ocr(
+            input_pdf, 
+            output_pdf,
+            force_ocr=True,
+            language=language
+        )
         
-        if result.returncode == 0:
+        if os.path.exists(output_pdf):
             print_progress("✓ 간단 OCR 완료")
             return True
         else:
-            print_progress(f"✗ 간단 OCR 실패 (코드: {result.returncode})")
-            if result.stderr:
-                print_progress(f"오류 메시지: {result.stderr}")
+            print_progress("✗ 간단 OCR 실패 - 출력 파일이 생성되지 않음")
             return False
             
-    except subprocess.TimeoutExpired:
-        print_progress("✗ 간단 OCR 시간 초과 (5분)")
-        return False
     except Exception as e:
         print_progress(f"✗ 간단 OCR 중 오류: {str(e)}")
         return False
