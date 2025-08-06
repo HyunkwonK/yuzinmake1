@@ -99,14 +99,14 @@ def check_ocr_dependencies():
     ocrmypdf_available = False
     try:
         import ocrmypdf
-        # 실제로 ocrmypdf 명령어가 실행되는지 확인
-        result = subprocess.run(['python', '-c', 'import ocrmypdf; print("✓ ocrmypdf available")'], 
-                               capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            print_progress("✓ ocrmypdf: Python 모듈로 사용 가능")
-            ocrmypdf_available = True
+        import ocrmypdf.data  # 이 모듈이 없으면 PyInstaller 패키징 문제
+        print_progress("✓ ocrmypdf: Python 모듈로 사용 가능")
+        ocrmypdf_available = True
+    except ImportError as e:
+        if "ocrmypdf.data" in str(e):
+            print_progress("✗ ocrmypdf: PyInstaller 패키징 문제 - ocrmypdf.data 모듈 누락")
         else:
-            print_progress("✗ ocrmypdf: Python 모듈 import 실패")
+            print_progress(f"✗ ocrmypdf: import 실패 - {str(e)}")
     except Exception as e:
         print_progress(f"✗ ocrmypdf: 확인 중 오류 - {str(e)}")
     
@@ -375,7 +375,13 @@ def ocr_pdf_with_options(input_pdf, language='eng+kor'):
 def ocr_pdf_advanced(input_pdf, output_pdf, language):
     """고급 옵션을 사용한 OCR 처리 - Python API 사용"""
     try:
-        import ocrmypdf
+        # 안전한 import
+        try:
+            import ocrmypdf
+            import ocrmypdf.data
+        except ImportError as e:
+            print_progress(f"✗ ocrmypdf import 실패: {str(e)}")
+            return False
         
         print_progress("🔍 고급 OCR 처리 중...")
         
@@ -408,7 +414,12 @@ def ocr_pdf_advanced(input_pdf, output_pdf, language):
 def ocr_pdf_basic(input_pdf, output_pdf, language):
     """기본 옵션을 사용한 OCR 처리 - Python API 사용"""
     try:
-        import ocrmypdf
+        try:
+            import ocrmypdf
+            import ocrmypdf.data
+        except ImportError as e:
+            print_progress(f"✗ ocrmypdf import 실패: {str(e)}")
+            return False
         
         print_progress("🔍 기본 OCR 처리 중...")
         
@@ -434,7 +445,12 @@ def ocr_pdf_basic(input_pdf, output_pdf, language):
 def ocr_pdf_minimal(input_pdf, output_pdf, language):
     """최소 옵션을 사용한 OCR 처리 - Python API 사용"""
     try:
-        import ocrmypdf
+        try:
+            import ocrmypdf
+            import ocrmypdf.data
+        except ImportError as e:
+            print_progress(f"✗ ocrmypdf import 실패: {str(e)}")
+            return False
         
         print_progress("🔍 최소 OCR 처리 중...")
         
@@ -459,7 +475,12 @@ def ocr_pdf_minimal(input_pdf, output_pdf, language):
 def ocr_pdf_simple(input_pdf, output_pdf, language):
     """가장 간단한 OCR 처리 - Python API 사용"""
     try:
-        import ocrmypdf
+        try:
+            import ocrmypdf
+            import ocrmypdf.data
+        except ImportError as e:
+            print_progress(f"✗ ocrmypdf import 실패: {str(e)}")
+            return False
         
         print_progress("🔍 간단 OCR 처리 중...")
         

@@ -54,8 +54,26 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install ocrmypdf
+        # OCR 관련 패키지들을 먼저 설치
+        pip install Pillow lxml reportlab
+        
+        # ocrmypdf의 다양한 옵션으로 설치 시도
+        echo "ocrmypdf 설치 중..."
+        pip install "ocrmypdf[optimize]" || echo "optimize 옵션 실패"
+        pip install "ocrmypdf[watcher]" || echo "watcher 옵션 실패"
+        pip install ocrmypdf || echo "기본 설치 실패"
+        
+        # 추가 OCR 관련 패키지들
+        pip install img2pdf reportlab coloredlogs
+        
+        # 나머지 패키지들 설치
         pip install pyinstaller pandas openpyxl xlsxwriter requests pdfplumber camelot-py[cv]
+        
+        # ocrmypdf 설치 확인
+        echo "ocrmypdf 설치 확인..."
+        python -c "import ocrmypdf; print('✓ ocrmypdf version:', ocrmypdf.__version__)"
+        python -c "try: import ocrmypdf.data; print('✓ ocrmypdf.data imported successfully'); except Exception as e: print('✗ ocrmypdf.data import failed:', e)"
+        python -c "import sys; print('Python path:'); [print(p) for p in sys.path]"
 
     # 5. PyInstaller로 .exe 파일 빌드
     - name: Build the EXE
@@ -86,7 +104,22 @@ jobs:
         
         # PyInstaller로 빌드
         echo "PyInstaller로 빌드 시작..."
-        pyinstaller --onefile --console --name "PDF_Translator" --add-data "C:\Program Files\Tesseract-OCR\tessdata;tessdata" test.py
+        
+        # ocrmypdf 데이터 경로 확인
+        $ocrmypdfPath = python -c "import ocrmypdf, os; print(os.path.dirname(ocrmypdf.__file__))"
+        echo "ocrmypdf 경로: $ocrmypdfPath"
+        
+        # PyInstaller 실행 (ocrmypdf 전체 포함)
+        pyinstaller --onefile --console --name "PDF_Translator" `
+          --add-data "C:\Program Files\Tesseract-OCR\tessdata;tessdata" `
+          --hidden-import "ocrmypdf" `
+          --hidden-import "ocrmypdf.data" `
+          --hidden-import "ocrmypdf.builtin_plugins" `
+          --hidden-import "ocrmypdf.builtin_plugins.optimize" `
+          --hidden-import "ocrmypdf.builtin_plugins.tesseract_ocr" `
+          --hidden-import "ocrmypdf.builtin_plugins.unpaper" `
+          --collect-all "ocrmypdf" `
+          test.py
         
         # 생성된 파일 확인
         if (Test-Path "dist\PDF_Translator.exe") {
